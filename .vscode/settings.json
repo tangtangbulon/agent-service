@@ -1,0 +1,12 @@
+{
+  "json.schemaDownload.enable": true,
+  "python.defaultInterpreterPath": "${workspaceFolder}/agent-service/.venv/bin/python",
+  "python.pythonPath": "${workspaceFolder}/agent-service/.venv/bin/python",
+  "python.venvPath": "${workspaceFolder}/agent-service",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/agent-service/.venv/lib/python3.14/site-packages"
+  ],
+  "cursorpyright.analysis.extraPaths": [
+    "${workspaceFolder}/agent-service/.venv/lib/python3.14/site-packages"
+  ]
+}

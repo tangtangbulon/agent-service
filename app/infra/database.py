@@ -6,10 +6,13 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-
+from fastapi import FastAPI
 from app.core.config import settings
 from app.core.logging import get_logger
 logger = get_logger(__name__)
+
+
+
 
 # 1. 数据库连接地址
 if not settings.db or not settings.db.url:
@@ -49,4 +52,4 @@ async def close_database() -> None:
 async def check_database() -> None:
     async with engine.connect() as connection:
         await connection.execute(text("SELECT 1"))
-    logger.info("数据库连接池初始化成功~✅️")
+    logger.info("数据库连接池初始化成功~✅️")    

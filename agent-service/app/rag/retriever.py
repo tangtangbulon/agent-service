@@ -1,16 +1,17 @@
 from langchain_milvus import Milvus
 from pymilvus import Function, FunctionType
 
+from app.core.logging import get_logger
 from app.infra.database import AsyncSessionFactory
 from app.rag.models import ParentChunk
 from app.rag.repository import ParentChunkRepository
-from app.core.logging import get_logger
+
 logger = get_logger(__name__)
 
 
-def create_reranker(query:str) -> Function:
-     """milvus的reranker function，这里采用ali的重排模型"""
-     return Function(
+def create_reranker(query: str) -> Function:
+    """milvus的reranker function，这里采用ali的重排模型"""
+    return Function(
         name="dashscope_semantic_ranker",
         input_field_names=["text"],
         function_type=FunctionType.RERANK,
@@ -28,12 +29,11 @@ MAX_TOP_K = 8
 
 
 class ParentChunkRetriever:
-
-    def __init__(self,vector_store:Milvus):
+    def __init__(self, vector_store: Milvus):
         self._vector_store = vector_store
         logger.info("RAG Retriever 初始化完成✅️")
 
-    async def retrieve(self,query:str,top_k:int,product_id:int) -> list[ParentChunk]:
+    async def retrieve(self, query: str, top_k: int, product_id: int) -> list[ParentChunk]:
         top_k = max(1, min(top_k, MAX_TOP_K))
         # 1.在指定产品内混合检索并重排，得到子块
         child_chunks = await self._vector_store.asimilarity_search(
@@ -44,31 +44,20 @@ class ParentChunkRetriever:
             reranker=create_reranker(query),
         )
         # 2.提取parent_id，并按照召回顺序去重
-        parent_ids=list(
-            dict.fromkeys(
-                child.metadata["parent_id"] for child in child_chunks
-            )
-        )
+        parent_ids = list(dict.fromkeys(child.metadata["parent_id"] for child in child_chunks))
         if not parent_ids:
             return []
         # 3.根据parent_id批量查询父块
         async with AsyncSessionFactory() as session:
-            repository=ParentChunkRepository(session)
+            repository = ParentChunkRepository(session)
             parent_chunks = await repository.list_by_ids(parent_ids)
-            
+
         # 4.按照子块召回顺序组装父文档
         # 4.1.先组装dict[parent_id, parent_chunk]
 
-        parent_chunk_map={
-            str(parent.id): parent 
-            for parent in parent_chunks
-        }
+        parent_chunk_map = {str(parent.id): parent for parent in parent_chunks}
         # 4.2.按照召回的parent_ids顺序遍历，再到dict中拿到parent；入库中途失败可能留下找不到父块的子块，跳过即可
         missing = [parent_id for parent_id in parent_ids if parent_id not in parent_chunk_map]
         if missing:
             logger.warning("子块对应的父块不存在，已跳过", product_id=product_id, missing=len(missing))
-        return [
-            parent_chunk_map[parent_id]
-            for parent_id in parent_ids
-            if parent_id in parent_chunk_map
-        ]
+        return [parent_chunk_map[parent_id] for parent_id in parent_ids if parent_id in parent_chunk_map]

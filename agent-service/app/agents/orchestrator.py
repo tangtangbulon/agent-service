@@ -1,117 +1,86 @@
 from typing import Literal
-from app.agents.insurance_advisor import init_insurance_advisor
+
 from langchain_core.messages import AIMessage, BaseMessage
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
-from .intent_router import intent_router
-from app.agents.schemas import (
-    InsuranceAgentState,
-    RouteResult,
-    Intent
-)
+
 from app.agents.chitchat import init_chitchat_agent
+from app.agents.insurance_advisor import init_insurance_advisor
+from app.agents.intent_router import IntentRouter
+from app.agents.schemas import InsuranceAgentContext, InsuranceAgentState, Intent
 
 
+def create_route_node(router: IntentRouter):
+    """创建意图识别节点：寒暄直接回复并结束，其余按识别出的意图进入对应工作流"""
 
-# 一、定义节点
+    async def route_node(state: InsuranceAgentState) -> Command[Intent | Literal["__end__"]]:
+        # 上一轮激活的工作流和最近一条AI回复，作为意图识别的上下文
+        previous_workflow = state.get("active_workflow", "")
+        previous_ai_message = find_previous_ai_message(list(state["messages"]))
+        context = f"上轮对话工作流:{previous_workflow}\n上轮对话AI回复:{previous_ai_message}"
 
-# 1.路由节点
-async def route_node(
-    state: InsuranceAgentState,
-) -> Command[Intent | Literal["__end__"]]:
-    """意图识别节点，后续再完善"""
-    
-    # 1.获取active_workflow，也就是上一轮会话的工作流
-    previous_workflow = state.get("active_workflow", "")
+        result = await router.route(str(state["messages"][-1].content), context)
 
-    # 2.获取上轮AI消息
-    previous_ai_message = find_previous_ai_message(list(state['messages']))
-    # 3.拼接上下文
-    context = f"上轮对话工作流:{previous_workflow}\n上轮对话AI回复:{previous_ai_message}"
-    # 4.调用意图识别模型
-    result = await intent_router.route(str(state['messages'][-1].content), context)
+        # 返回字符串说明是寒暄，直接给固定回复
+        if isinstance(result, str):
+            return Command(
+                update={
+                    "messages": [AIMessage(content=result)],
+                    "previous_workflow": previous_workflow,
+                    "active_workflow": "chitchat",
+                },
+                goto="__end__",
+            )
 
-    # 4.1.返回str，说明是寒暄，直接返回固定回复，跳至END
-    if isinstance(result, str):
         return Command(
             update={
-                "messages": [AIMessage(content=result)],
                 "previous_workflow": previous_workflow,
-                "active_workflow": "chitchat",
+                "active_workflow": result.intent,
             },
-            goto="__end__",
+            goto=result.intent,
         )
 
+    return route_node
 
 
-    # 4.2.返回RouteResult，记录上轮工作流、本轮工作流
-    intent = "chitchat"
-    return Command(
-        update={
-            "previous_workflow": previous_workflow,
-            "active_workflow": result.intent
-        },
-        goto=result.intent,
-    )
 def find_previous_ai_message(messages: list[BaseMessage]) -> str:
     """查找本轮用户消息之前最近一条可展示的AI回复"""
     for message in reversed(messages[:-1]):
-        # 跳过非AIMessage
-        if not isinstance(message, AIMessage):
+        if not isinstance(message, AIMessage) or message.tool_calls:
             continue
-        # 跳过工具消息
-        if message.tool_calls:
-            continue
-        # 如果是正常AIMessage，直接返回
         if message.text:
             return message.text
-    # 如果是空消息
     return ""
 
-# 2.闲聊节点
-#async def chitchat_node(state: InsuranceAgentState) -> dict:
-    #return {"messages": [AIMessage("你好，今天想聊点什么？")]}
 
-
-# 3.保险推荐节点
-#async def recommendation_node(state: InsuranceAgentState) -> dict:
-    #return {"messages": [AIMessage("保险推荐工作流暂未接入。")]}
-
-
-# 4.理赔节点
 async def claim_node(state: InsuranceAgentState) -> dict:
     return {"messages": [AIMessage("理赔工作流暂未接入。")]}
 
 
-# 5.人工节点
 def human_handoff_node(state: InsuranceAgentState) -> dict:
     return {"messages": [AIMessage("已记录转人工请求，后续可接入人工客服系统。")]}
 
 
-# 6.fallback节点
 def fallback_node(state: InsuranceAgentState) -> dict:
     return {"messages": [AIMessage("我还不能确定你的需求，请说明是想咨询保险、推荐方案还是办理理赔。")]}
 
-# 二、定义主Graph
+
 async def init_insurance_orchestrator(
-    checkpointer: AsyncPostgresSaver,
+    checkpointer: BaseCheckpointSaver,
+    router: IntentRouter | None = None,
 ):
     """初始化保险顾问主Graph"""
-
-    builder = StateGraph(InsuranceAgentState, )
-    builder.add_node("route", route_node)
+    builder = StateGraph(InsuranceAgentState, context_schema=InsuranceAgentContext)
+    builder.add_node("route", create_route_node(router or IntentRouter()))
     builder.add_node("chitchat", init_chitchat_agent())
-    builder.add_node("recommendation_plan",await init_insurance_advisor() )
+    builder.add_node("recommendation_plan", await init_insurance_advisor())
     builder.add_node("claim", claim_node)
     builder.add_node("human_handoff", human_handoff_node)
     builder.add_node("fallback", fallback_node)
 
     builder.add_edge(START, "route")
-    builder.add_edge("chitchat", END)
-    builder.add_edge("recommendation_plan", END)
-    builder.add_edge("claim", END)
-    builder.add_edge("human_handoff", END)
-    builder.add_edge("fallback", END)
+    for node in ("chitchat", "recommendation_plan", "claim", "human_handoff", "fallback"):
+        builder.add_edge(node, END)
 
     return builder.compile(checkpointer=checkpointer)

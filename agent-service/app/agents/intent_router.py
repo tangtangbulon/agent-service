@@ -21,16 +21,13 @@ intent只能从以下选项中选择：
 - fallback：无法判断用户意图
 """.strip()
 
+
 class IntentRouter:
-
     def __init__(self) -> None:
-        self.model = create_chat_model().with_structured_output(RouteResult)
+        # 分类任务需要稳定输出，温度设为 0，避免同一句话时而判对时而判错
+        self.model = create_chat_model(temperature=0).with_structured_output(RouteResult)
 
-    async def route(
-        self,
-        message: str,
-        context: str
-    ) -> RouteResult | str:
+    async def route(self, message: str, context: str) -> RouteResult | str:
         # 1.简单寒暄优先使用规则处理
         social_intent = match_social_intent(message)
         if social_intent:
@@ -52,6 +49,7 @@ class IntentRouter:
                 intent="fallback",
                 reason="模型意图识别失败",
             )
+
 
 # 基于规则的识别是否为寒暄
 
@@ -87,6 +85,7 @@ SOCIAL_RESPONSES: dict[SocialIntent, str] = {
     "goodbye": "好的，后续需要帮助时随时联系我。",
 }
 
+
 def normalize_message(message: str) -> str:
     """格式化消息，去掉无效字符"""
 
@@ -102,10 +101,8 @@ def match_social_intent(message: str) -> SocialIntent | None:
             return intent
     return None
 
+
 def response_by_social_intent(intent: SocialIntent) -> str:
     """根据规则识别出的意图返回固定回复"""
 
     return SOCIAL_RESPONSES[intent]
-
-
-intent_router = IntentRouter()

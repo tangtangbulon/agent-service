@@ -16,24 +16,16 @@ class InsurancePlanRepository:
         self.session = session
 
     async def create(
-        self, 
+        self,
         user_id: int,
         data: InsurancePlanCreate,
     ) -> InsurancePlan:
         # 1.计算方案年缴总预算
-        item_budgets=[
-            item.annual_premium_budget
-            for item in data.items
-            if item.annual_premium_budget is not None
-        ]
-        annual_premium_budget =(
-            sum(item_budgets,Decimal("0"))
-            if item_budgets 
-            else None
-        )
+        item_budgets = [item.annual_premium_budget for item in data.items if item.annual_premium_budget is not None]
+        annual_premium_budget = sum(item_budgets, Decimal("0")) if item_budgets else None
 
         # 2.保存保险方案
-        plan=InsurancePlan(
+        plan = InsurancePlan(
             user_id=user_id,
             plan_name=data.plan_name,
             summary=data.summary,
@@ -44,14 +36,13 @@ class InsurancePlanRepository:
         await self.session.flush()
 
         # 3.保存方案项
-        plan_items=[
+        plan_items = [
             InsurancePlanItem(
                 plan_id=plan.id,
                 product_id=item.product_id,
                 priority=item.priority,
                 recommendation_reason=item.recommendation_reason,
                 annual_premium_budget=item.annual_premium_budget,
-                
             )
             for item in data.items
         ]

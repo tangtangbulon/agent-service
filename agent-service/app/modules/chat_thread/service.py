@@ -1,17 +1,17 @@
 import json
 from typing import Any
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.modules.chat_thread.repository import ChatThreadRepository
-from app.modules.chat_thread.models import ChatThread
 from uuid import UUID
-from app.modules.chat_thread.exceptions import ChatThreadNotFoundError
-from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.graph.state import CompiledStateGraph
+
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
-from app.agents.interrupts import pending_interrupt_value
-from app.modules.chat_thread.schemas import ChatHistoryResponse,ChatMessageResponse
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.graph.state import CompiledStateGraph
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.chat_thread.exceptions import ChatThreadNotFoundError
+from app.modules.chat_thread.models import ChatThread
+from app.modules.chat_thread.repository import ChatThreadRepository
+from app.modules.chat_thread.schemas import ChatHistoryResponse, ChatMessageResponse
 
 
 def _clause_sources(message: BaseMessage) -> dict[str, Any] | None:
@@ -72,25 +72,24 @@ def build_history_messages(
 
 
 class ChatThreadService:
-    def __init__(self,session:AsyncSession,agent:CompiledStateGraph):
+    def __init__(self, session: AsyncSession, agent: CompiledStateGraph):
         self.session = session
         self.repository = ChatThreadRepository(session)
         self.agent = agent
 
-    async def add(self,user_id:int,title:str):
+    async def add(self, user_id: int, title: str):
         # 用上下文管理，开启事务，运行完成，自动commit，出现异常，自动rollback
         async with self.session.begin():
             # 创建对象，对象 映射 到数据库 一条数据
-            chat_thread = ChatThread(user_id=user_id,title=title)
+            chat_thread = ChatThread(user_id=user_id, title=title)
             # 新增对象，就是插入一条数据
             await self.repository.add(chat_thread)
             return chat_thread
 
-    async def list_by_user_id(self,user_id:int):
+    async def list_by_user_id(self, user_id: int):
         return await self.repository.list_by_user_id(user_id)
 
-
-    async def rename(self,thread_id:UUID,user_id:int,title:str) -> ChatThread:
+    async def rename(self, thread_id: UUID, user_id: int, title: str) -> ChatThread:
         async with self.session.begin():
             # 1.根据thread_id和user_id查询，判断是否匹配
             chat_thread = await self.repository.find_owned(thread_id, user_id)
@@ -103,13 +102,11 @@ class ChatThreadService:
             await self.session.refresh(chat_thread)
         return chat_thread
 
-    async def get_chat_history(self,thread_id:UUID,user_id:int) -> ChatHistoryResponse:
+    async def get_chat_history(self, thread_id: UUID, user_id: int) -> ChatHistoryResponse:
         chat_thread = await self.repository.find_owned(thread_id, user_id)
         if chat_thread is None:
             raise ChatThreadNotFoundError()
-        config: RunnableConfig = {
-            "configurable": {"thread_id": str(thread_id)}
-        }
+        config: RunnableConfig = {"configurable": {"thread_id": str(thread_id)}}
         state_snapshot = await self.agent.aget_state(config)
         additional_infos = state_snapshot.values.get("additional_info", {})
         messages = build_history_messages(
@@ -119,11 +116,11 @@ class ChatThreadService:
 
         # 5.处理interrupt
         interrupts = None
-        if hasattr(state_snapshot, 'interrupts') and state_snapshot.interrupts:
+        if hasattr(state_snapshot, "interrupts") and state_snapshot.interrupts:
             interrupts = state_snapshot.interrupts
-        elif hasattr(state_snapshot, 'tasks') and state_snapshot.tasks:
+        elif hasattr(state_snapshot, "tasks") and state_snapshot.tasks:
             for task in state_snapshot.tasks:
-                if hasattr(task, 'interrupts') and task.interrupts:
+                if hasattr(task, "interrupts") and task.interrupts:
                     interrupts = task.interrupts
                     break
         return ChatHistoryResponse(
@@ -132,11 +129,7 @@ class ChatThreadService:
             interrupt=interrupts[0].value if interrupts else None,
         )
 
-    async def delete(
-        self,
-        thread_id:UUID,
-        user_id:int
-        ) -> None:
+    async def delete(self, thread_id: UUID, user_id: int) -> None:
         async with self.session.begin():
             thread = await self.repository.find_owned(thread_id, user_id)
             if thread is None:

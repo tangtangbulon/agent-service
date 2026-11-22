@@ -1,15 +1,11 @@
-from pydantic import BaseModel,ConfigDict
-from decimal import Decimal
-from typing import Generic, TypeVar
+from pydantic import BaseModel, ConfigDict
 
 
 class BaseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
 
-T = TypeVar("T")
 
-class PageResult(BaseSchema,Generic[T]):
+class PageResult[T](BaseSchema):
     items: list[T]
     total: int
     page: int

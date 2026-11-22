@@ -83,11 +83,7 @@ def configure_logging(level: str = "INFO", fmt: str = "console") -> None:
     warnings.filterwarnings("ignore", message=".*v3 streaming protocol.*", category=LangChainBetaWarning)
 
     # 控制第三方库日志数量
-    logging.getLogger("sqlalchemy.engine").setLevel(
-        logging.INFO
-        if log_level == logging.DEBUG
-        else logging.WARNING
-    )
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO if log_level == logging.DEBUG else logging.WARNING)
 
     for name in ("httpx", "httpx2", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)
@@ -96,6 +92,7 @@ def configure_logging(level: str = "INFO", fmt: str = "console") -> None:
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     """获取 structlog 日志器。"""
     return structlog.get_logger(name)
+
 
 def _log_level(level: str) -> int:
     """将字符串日志级别转换为 logging 常量。"""

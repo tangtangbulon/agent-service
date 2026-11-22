@@ -1,0 +1,45 @@
+{"message": "我30岁，想买一份医疗险，有什么推荐", "expected": ["recommendation_plan"]}
+{"message": "给我孩子配一份重疾险", "expected": ["recommendation_plan"]}
+{"message": "预算每年2000元，怎么配置保险比较合适", "expected": ["recommendation_plan"]}
+{"message": "众安尊享e生的等待期是多久", "expected": ["recommendation_plan"]}
+{"message": "百万医疗险和重疾险有什么区别", "expected": ["recommendation_plan"]}
+{"message": "帮我看看小蜜蜂6号意外险保什么", "expected": ["recommendation_plan"]}
+{"message": "我想投保达尔文12号，需要满足什么条件", "expected": ["recommendation_plan"]}
+{"message": "父母60岁了还能买什么保险", "expected": ["recommendation_plan"]}
+{"message": "有高血压还能买医疗险吗", "expected": ["recommendation_plan"]}
+{"message": "帮我把刚才的方案保存一下", "expected": ["recommendation_plan"]}
+{"message": "终身寿险和定期寿险怎么选", "expected": ["recommendation_plan"]}
+{"message": "意外险一年大概要多少钱", "expected": ["recommendation_plan"]}
+{"message": "我住院了，怎么申请理赔", "expected": ["claim"]}
+{"message": "理赔需要准备哪些材料", "expected": ["claim"]}
+{"message": "我上周报的案，理赔进度怎么样了", "expected": ["claim"]}
+{"message": "意外骨折能赔多少钱", "expected": ["claim", "recommendation_plan"]}
+{"message": "孩子在学校摔伤了，学平险怎么报销", "expected": ["claim"]}
+{"message": "我的理赔被拒了，是什么原因", "expected": ["claim", "human_handoff"]}
+{"message": "我要报案", "expected": ["claim"]}
+{"message": "理赔款多久能到账", "expected": ["claim"]}
+{"message": "我要投诉你们的客服", "expected": ["human_handoff"]}
+{"message": "转人工", "expected": ["human_handoff"]}
+{"message": "帮我找个真人客服", "expected": ["human_handoff"]}
+{"message": "你们乱扣费，我要去监管部门投诉", "expected": ["human_handoff"]}
+{"message": "不想和机器人聊了，叫你们负责人来", "expected": ["human_handoff"]}
+{"message": "退保的钱一直没退给我，我要人工处理", "expected": ["human_handoff", "claim"]}
+{"message": "今天天气怎么样", "expected": ["chitchat"]}
+{"message": "给我讲个笑话", "expected": ["chitchat"]}
+{"message": "你是谁开发的", "expected": ["chitchat"]}
+{"message": "推荐一部好看的电影", "expected": ["chitchat"]}
+{"message": "你会写诗吗", "expected": ["chitchat"]}
+{"message": "周末去哪里玩比较好", "expected": ["chitchat"]}
+{"message": "你喜欢什么颜色", "expected": ["chitchat"]}
+{"message": "最近股市行情怎么样", "expected": ["chitchat", "fallback"]}
+{"message": "你好", "expected": ["chitchat"], "note": "规则匹配的寒暄"}
+{"message": "谢谢", "expected": ["chitchat"], "note": "规则匹配的寒暄"}
+{"message": "拜拜", "expected": ["chitchat"], "note": "规则匹配的寒暄"}
+{"message": "在吗", "expected": ["chitchat"], "note": "规则匹配的寒暄"}
+{"message": "嗯", "expected": ["fallback", "chitchat"]}
+{"message": "那个……", "expected": ["fallback", "chitchat"]}
+{"message": "？？？", "expected": ["fallback", "chitchat"]}
+{"message": "这个呢", "expected": ["fallback", "chitchat"]}
+{"message": "怎么弄", "expected": ["fallback", "chitchat"]}
+{"message": "达尔文宝贝计划12号犹豫期内退保能退多少钱？", "expected": ["recommendation_plan"], "note": "条款咨询，曾被误判为转人工"}
+{"message": "达尔文12号的身故保险金怎么申请？", "expected": ["claim", "recommendation_plan"], "note": "理赔流程类问题，理赔工作流尚未实现"}

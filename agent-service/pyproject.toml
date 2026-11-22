@@ -34,6 +34,44 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipykernel>=7.3.0",
+    "pyright>=1.1.414",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.5.0",
+    "ruff>=0.17.6",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+# E/W 代码风格，F 未定义或未使用的名称，I 导入排序，UP 新语法，B 常见 bug 写法
+select = ["E", "W", "F", "I", "UP", "B"]
+# 中文提示语和日志常常超过行宽，不强制
+ignore = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 依赖注入的标准写法是把 Depends/Query 放在参数默认值里
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header"]
+
+[tool.ruff.lint.per-file-ignores]
+# main.py 需要先配置日志再导入业务模块
+"app/main.py" = ["E402"]
+
+[tool.pyright]
+include = ["app", "scripts", "tests", "evals"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.14"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+markers = [
+    "integration: 需要 TEST_DATABASE_URL 指向的 PostgreSQL 测试库",
 ]
 
 [build-system]

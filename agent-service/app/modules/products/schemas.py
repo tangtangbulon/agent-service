@@ -1,15 +1,15 @@
-from pydantic import BaseModel,ConfigDict
 from decimal import Decimal
-from app.common.schemas import BaseSchema
+
 from pydantic import field_validator
 
+from app.common.schemas import BaseSchema
 
 
-class ProductReponse(BaseSchema):
+class ProductResponse(BaseSchema):
     """保险产品响应结果"""
-    
-    id:int
-    name:str
+
+    id: int
+    name: str
     clause_name: str
     category: str
     insurer: str
@@ -22,8 +22,7 @@ class ProductReponse(BaseSchema):
     status: str
 
 
-
-@field_validator('highlights',mode='before')
+@field_validator("highlights", mode="before")
 @classmethod
-def normalize_highlights(cls,value:list[str]|None)->list[str]:
+def normalize_highlights(cls, value: list[str] | None) -> list[str]:
     return value or []

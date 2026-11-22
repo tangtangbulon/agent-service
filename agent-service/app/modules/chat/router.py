@@ -1,18 +1,16 @@
 from collections.abc import AsyncGenerator
 
+from fastapi import APIRouter, Depends, Request
 from fastapi.sse import EventSourceResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import APIRouter, Depends, Request
 from app.infra.database import get_session
 from app.modules.auth.dependencies import CurrentUserId
+
 from .exceptions import ChatThreadBusyError
 from .run_lock import thread_run_lock
 from .schemas import ChatRequest
 from .service import ChatService, PreparedChat
-
-
-
 
 router = APIRouter(prefix="/api/v1/chat", tags=["与AI对话接口"])
 
@@ -21,8 +19,8 @@ def get_chat_service(
     http_request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    agent=http_request.app.state.agent
-    return ChatService(session,agent)
+    agent = http_request.app.state.agent
+    return ChatService(session, agent)
 
 
 async def prepare_chat(
@@ -39,7 +37,7 @@ async def prepare_chat(
         thread_run_lock.release(request.thread_id)
 
 
-@router.post("",response_class=EventSourceResponse)
+@router.post("", response_class=EventSourceResponse)
 async def chat(
     prepared: PreparedChat = Depends(prepare_chat),
     service: ChatService = Depends(get_chat_service),

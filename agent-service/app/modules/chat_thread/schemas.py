@@ -1,10 +1,11 @@
-
 from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import  field_validator, Field
+from pydantic import Field, field_validator
+
 from app.common.schemas import BaseSchema
+
 
 class ChatThreadCreate(BaseSchema):
     """创建会话请求"""
@@ -40,6 +41,3 @@ class ChatHistoryResponse(BaseSchema):
     thread_id: UUID
     messages: list[ChatMessageResponse]
     interrupt: dict[str, Any] | None = None
-
-
-

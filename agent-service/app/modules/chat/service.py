@@ -1,16 +1,19 @@
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any
+
 from aiostream import stream as astream
 from fastapi.sse import ServerSentEvent
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.stream import CustomTransformer
 from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession
-from langgraph.stream import CustomTransformer
+
 from app.agents.interrupts import pending_interrupt_value
 from app.agents.schemas import InsuranceAgentContext
+from app.core.logging import get_logger
 from app.modules.chat.exceptions import (
     ChatDecisionNotExpectedError,
     ChatPendingConfirmationError,
@@ -18,7 +21,6 @@ from app.modules.chat.exceptions import (
 from app.modules.chat.schemas import ChatRequest
 from app.modules.chat_thread.exceptions import ChatThreadNotFoundError
 from app.modules.chat_thread.repository import ChatThreadRepository
-from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -91,18 +93,14 @@ class ChatService:
         if thread is None:
             raise ChatThreadNotFoundError
 
-        config: RunnableConfig = {
-            "configurable": {"thread_id": str(request.thread_id)}
-        }
+        config: RunnableConfig = {"configurable": {"thread_id": str(request.thread_id)}}
         snapshot = await self.agent.aget_state(config)
         pending = pending_interrupt_value(snapshot)
 
         if request.decision is not None:
             if pending is None:
                 raise ChatDecisionNotExpectedError
-            graph_input: dict[str, Any] | Command = Command(
-                resume=request.decision.model_dump(exclude_none=True)
-            )
+            graph_input: dict[str, Any] | Command = Command(resume=request.decision.model_dump(exclude_none=True))
         else:
             if pending is not None:
                 raise ChatPendingConfirmationError(pending)

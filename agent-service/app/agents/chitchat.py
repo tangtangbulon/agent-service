@@ -26,7 +26,9 @@ MAX_CHITCHAT_COUNT = 3
 
 class ChitchatState(InsuranceAgentState):
     """闲聊子Agent状态"""
+
     chitchat_count: NotRequired[int]
+
 
 class ChitchatAgent:
     def __init__(self) -> None:
@@ -35,7 +37,7 @@ class ChitchatAgent:
     async def handle_chitchat(
         self,
         state: ChitchatState,
-    )->dict:
+    ) -> dict:
         count = state.get("chitchat_count", 0)
         # 上一轮不是闲聊，重新开始计数
         if state.get("previous_workflow") != "chitchat":
@@ -44,15 +46,13 @@ class ChitchatAgent:
         logger.info("处理闲聊消息", chitchat_count=count)
 
         if count >= MAX_CHITCHAT_COUNT:
-            return{
-                "messages": [
-                    AIMessage("我主要协助处理保险产品、投保和理赔咨询，请告诉我想办理或了解的事项。")
-                    ],
+            return {
+                "messages": [AIMessage("我主要协助处理保险产品、投保和理赔咨询，请告诉我想办理或了解的事项。")],
             }
         response = await self.model.ainvoke(
             [
                 SystemMessage(content=SYSTEM_MESSAGE),
-                *trim_for_model(state['messages']),
+                *trim_for_model(state["messages"]),
             ]
         )
         return {
@@ -64,11 +64,11 @@ class ChitchatAgent:
         builder = StateGraph(ChitchatState)
         builder.add_node("handle_chitchat", self.handle_chitchat)
         builder.set_entry_point("handle_chitchat")
-        builder.set_finish_point("handle_chitchat") 
+        builder.set_finish_point("handle_chitchat")
 
         # 使用父Graph提供的Checkpointer，保存子图私有状态
         return builder.compile(checkpointer=True)
 
+
 def init_chitchat_agent():
     return ChitchatAgent().build()
-

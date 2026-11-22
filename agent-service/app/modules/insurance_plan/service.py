@@ -7,7 +7,6 @@ from app.modules.insurance_plan.exceptions import (
     InsurancePlanNotFoundError,
     InvalidPlanProductError,
 )
-from app.modules.products.service import ProductService
 from app.modules.insurance_plan.models import InsurancePlan, InsurancePlanItem
 from app.modules.insurance_plan.repository import InsurancePlanRepository
 from app.modules.insurance_plan.schemas import (
@@ -15,6 +14,7 @@ from app.modules.insurance_plan.schemas import (
     InsurancePlanItemResponse,
     InsurancePlanResponse,
 )
+from app.modules.products.service import ProductService
 
 
 def _to_response(plan: InsurancePlan, items: list[InsurancePlanItem]) -> InsurancePlanResponse:
@@ -49,24 +49,22 @@ class InsurancePlanService:
             raise InvalidPlanProductError(f"以下产品ID不存在或已下架：{invalid}")
 
         items = [
-            item.model_copy(update={
-                "product_name": products[item.product_id].name,
-                "category": products[item.product_id].category,
-            })
+            item.model_copy(
+                update={
+                    "product_name": products[item.product_id].name,
+                    "category": products[item.product_id].category,
+                }
+            )
             for item in data.items
         ]
         return data.model_copy(update={"items": items})
 
-    async def create_plan(
-        self, 
-        user_id: int, 
-        data: InsurancePlanCreate
-    ) -> UUID:
+    async def create_plan(self, user_id: int, data: InsurancePlanCreate) -> UUID:
         try:
-            plan=await self.repository.create(
-                user_id=user_id, 
+            plan = await self.repository.create(
+                user_id=user_id,
                 data=data,
-                )
+            )
             await self.session.commit()
             return plan.id
         except Exception as e:

@@ -1,12 +1,14 @@
 from langchain.agents import create_agent
 from langchain.agents.middleware import ToolErrorMiddleware
 from langchain.agents.middleware.types import ToolCallRequest
+
 from app.agents.history import TrimHistoryMiddleware
 from app.agents.message_history import ToolCallHistoryMiddleware
-from app.agents.tools import query_candidate_products,save_insurance_plan,query_product_clause
-from app.core.logging import get_logger
 from app.agents.schemas import InsuranceAgentContext
+from app.agents.tools import query_candidate_products, query_product_clause, save_insurance_plan
+from app.core.logging import get_logger
 from app.infra.llm import create_chat_model
+
 logger = get_logger(__name__)
 
 
@@ -27,7 +29,9 @@ SYSTEM_PROMPT = """
 def _tool_error_message(exc: Exception, request: ToolCallRequest) -> str:
     tool_name = request.tool_call["name"]
     logger.exception("工具调用失败", tool=tool_name, error_type=type(exc).__name__)
-    return f"工具 {tool_name} 调用失败（{type(exc).__name__}），本次无法获取结果。请如实告知用户稍后再试，不要编造内容。"
+    return (
+        f"工具 {tool_name} 调用失败（{type(exc).__name__}），本次无法获取结果。请如实告知用户稍后再试，不要编造内容。"
+    )
 
 
 async def init_insurance_advisor():
@@ -36,13 +40,13 @@ async def init_insurance_advisor():
     # 1.初始化模型
     model = create_chat_model()
 
-    # 2.创建Agent 
+    # 2.创建Agent
     agent = create_agent(
         model=model,
-        tools=[query_candidate_products,save_insurance_plan,query_product_clause],
+        tools=[query_candidate_products, save_insurance_plan, query_product_clause],
         system_prompt=SYSTEM_PROMPT,
         checkpointer=True,
-        context_schema=InsuranceAgentContext,    # Context约束
+        context_schema=InsuranceAgentContext,  # Context约束
         middleware=[
             ToolCallHistoryMiddleware(),
             TrimHistoryMiddleware(),

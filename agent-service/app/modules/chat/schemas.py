@@ -1,6 +1,6 @@
 from typing import Literal, Self
 from uuid import UUID
-from typing import Any
+
 from pydantic import BaseModel, Field, model_validator
 
 

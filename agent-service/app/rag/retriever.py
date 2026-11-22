@@ -24,6 +24,9 @@ def create_reranker(query:str) -> Function:
     )
 
 
+MAX_TOP_K = 8
+
+
 class ParentChunkRetriever:
 
     def __init__(self,vector_store:Milvus):
@@ -31,12 +34,13 @@ class ParentChunkRetriever:
         logger.info("RAG Retriever 初始化完成✅️")
 
     async def retrieve(self,query:str,top_k:int,product_id:int) -> list[ParentChunk]:
+        top_k = max(1, min(top_k, MAX_TOP_K))
         # 1.在指定产品内混合检索并重排，得到子块
         child_chunks = await self._vector_store.asimilarity_search(
             query=query,
             k=top_k,
-            fetch_k=10,
-            expr=f"product_id == {product_id}", 
+            fetch_k=max(10, top_k * 2),
+            expr=f"product_id == {int(product_id)}",
             reranker=create_reranker(query),
         )
         # 2.提取parent_id，并按照召回顺序去重
@@ -59,8 +63,12 @@ class ParentChunkRetriever:
             str(parent.id): parent 
             for parent in parent_chunks
         }
-        # 4.2.按照召回的parent_ids顺序遍历，再到dict中拿到parent
+        # 4.2.按照召回的parent_ids顺序遍历，再到dict中拿到parent；入库中途失败可能留下找不到父块的子块，跳过即可
+        missing = [parent_id for parent_id in parent_ids if parent_id not in parent_chunk_map]
+        if missing:
+            logger.warning("子块对应的父块不存在，已跳过", product_id=product_id, missing=len(missing))
         return [
             parent_chunk_map[parent_id]
             for parent_id in parent_ids
+            if parent_id in parent_chunk_map
         ]

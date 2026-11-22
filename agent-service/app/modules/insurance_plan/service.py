@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.insurance_plan.exceptions import (
     InsurancePlanItemNotFoundError,
     InsurancePlanNotFoundError,
+    InvalidPlanProductError,
 )
+from app.modules.products.service import ProductService
 from app.modules.insurance_plan.models import InsurancePlan, InsurancePlanItem
 from app.modules.insurance_plan.repository import InsurancePlanRepository
 from app.modules.insurance_plan.schemas import (
@@ -33,6 +35,27 @@ class InsurancePlanService:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.repository = InsurancePlanRepository(session)
+
+    async def normalize_plan(self, data: InsurancePlanCreate) -> InsurancePlanCreate:
+        """校验方案里的产品都存在且在售、没有重复，并用数据库里的产品名称和险种覆盖模型生成的值"""
+        product_ids = [item.product_id for item in data.items]
+        duplicated = sorted({pid for pid in product_ids if product_ids.count(pid) > 1})
+        if duplicated:
+            raise InvalidPlanProductError(f"方案中存在重复的产品ID：{duplicated}")
+
+        products = await ProductService(self.session).get_active_by_ids(product_ids)
+        invalid = [pid for pid in product_ids if pid not in products]
+        if invalid:
+            raise InvalidPlanProductError(f"以下产品ID不存在或已下架：{invalid}")
+
+        items = [
+            item.model_copy(update={
+                "product_name": products[item.product_id].name,
+                "category": products[item.product_id].category,
+            })
+            for item in data.items
+        ]
+        return data.model_copy(update={"items": items})
 
     async def create_plan(
         self, 

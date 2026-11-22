@@ -28,6 +28,10 @@ class ProductRepository:
         return list(products.all())
 
 
+    async def find_by_ids(self, ids: list[int]) -> list[Product]:
+        products = await self.session.scalars(select(Product).where(Product.id.in_(ids)))
+        return list(products.all())
+
     async def find_limited_by_category(
         self,
         category: str,

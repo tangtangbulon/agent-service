@@ -1,9 +1,13 @@
+from collections.abc import AsyncGenerator
+
 from fastapi.sse import EventSourceResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi import APIRouter, Depends, Request
 from app.infra.database import get_session
 from app.modules.auth.dependencies import CurrentUserId
+from .exceptions import ChatThreadBusyError
+from .run_lock import thread_run_lock
 from .schemas import ChatRequest
 from .service import ChatService, PreparedChat
 
@@ -25,8 +29,14 @@ async def prepare_chat(
     request: ChatRequest,
     user_id: CurrentUserId,
     service: ChatService = Depends(get_chat_service),
-) -> PreparedChat:
-    return await service.prepare(user_id, request)
+) -> AsyncGenerator[PreparedChat]:
+    # yield 依赖在整个流式响应结束（包括客户端提前断开）后才会执行 finally，锁一定会被释放
+    if not thread_run_lock.try_acquire(request.thread_id):
+        raise ChatThreadBusyError()
+    try:
+        yield await service.prepare(user_id, request)
+    finally:
+        thread_run_lock.release(request.thread_id)
 
 
 @router.post("",response_class=EventSourceResponse)

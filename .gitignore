@@ -10,6 +10,9 @@ wheels/
 .venv
 .env
 
+# 入库脚本缓存的 PDF 解析结果，可随时重新生成
+agent-service/data/processed/
+
 # 含密钥的部署配置，仓库里只保留 *.example 模板
 deploy/milvus/user.yaml
 

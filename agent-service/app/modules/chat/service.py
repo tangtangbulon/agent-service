@@ -18,6 +18,9 @@ from app.modules.chat.exceptions import (
 from app.modules.chat.schemas import ChatRequest
 from app.modules.chat_thread.exceptions import ChatThreadNotFoundError
 from app.modules.chat_thread.repository import ChatThreadRepository
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _additional_info_event(event: Any) -> ServerSentEvent | None:
@@ -80,6 +83,9 @@ class ChatService:
             request.thread_id,
             user_id,
         )
+        if thread is not None:
+            await self.repository.touch(thread.id)
+            await self.session.commit()
         # session 要等整个 SSE 响应结束才会被依赖注入关闭，必须在流式输出前主动归还连接
         await self.session.close()
         if thread is None:
@@ -111,20 +117,29 @@ class ChatService:
         )
 
     async def chat_stream(self, prepared: PreparedChat) -> AsyncGenerator[ServerSentEvent]:
-        stream = await self.agent.astream_events(
-            prepared.graph_input,
-            prepared.config,
-            context=prepared.context,
-            version="v3",
-            transformers=[CustomTransformer],
-        )
+        try:
+            stream = await self.agent.astream_events(
+                prepared.graph_input,
+                prepared.config,
+                context=prepared.context,
+                version="v3",
+                transformers=[CustomTransformer],
+            )
 
-        async for event in iter_run_events(stream):
-            yield event
+            async for event in iter_run_events(stream):
+                yield event
 
-        # 流结束后再读取中断，最后返回结束标识
-        for interrupt in await stream.interrupts():
-            payload = getattr(interrupt, "value", interrupt)
-            if isinstance(payload, dict):
-                yield ServerSentEvent(data=payload, event="interrupt")
+            # 流结束后再读取中断，最后返回结束标识
+            for interrupt in await stream.interrupts():
+                payload = getattr(interrupt, "value", interrupt)
+                if isinstance(payload, dict):
+                    yield ServerSentEvent(data=payload, event="interrupt")
+        except Exception:
+            # 响应头已经发出，只能通过 SSE 事件告诉前端出错了
+            logger.exception("生成回复失败", thread_id=prepared.config.get("configurable", {}).get("thread_id"))
+            yield ServerSentEvent(
+                data={"code": "chat_failed", "message": "生成回复时出错，请稍后重试"},
+                event="error",
+            )
+            return
         yield ServerSentEvent(data="[DONE]", event="done")

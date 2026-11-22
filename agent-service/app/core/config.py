@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from pydantic import Field, computed_field, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -62,6 +62,12 @@ class LLMSettings(EnvSettings):
     """模型相关配置"""
     api_key: str = Field(alias="DEEPSEEK_API_KEY")
     chat_model: str = Field(alias="CHAT_MODEL", default="deepseek-v4-flash")
+    timeout_seconds: float = Field(alias="LLM_TIMEOUT_SECONDS", default=60, gt=0, description="单次模型请求超时")
+    max_retries: int = Field(alias="LLM_MAX_RETRIES", default=2, ge=0, description="模型请求失败后的重试次数")
+    max_history_tokens: int = Field(
+        alias="LLM_MAX_HISTORY_TOKENS", default=8000, gt=0,
+        description="每次发给模型的历史消息估算token上限，超出部分从最早的消息开始丢弃",
+    )
 
 class AuthSettings(EnvSettings):
     """认证相关配置"""
@@ -72,6 +78,7 @@ class AuthSettings(EnvSettings):
 class LoggingSettings(EnvSettings):
     """日志相关配置"""
     level: str = Field(alias="LOGGING_LEVEL", default="INFO") # 可选值：DEBUG、INFO、WARNING、ERROR、CRITICAL
+    format: Literal["console", "json"] = Field(alias="LOGGING_FORMAT", default="console", description="生产环境使用json，便于日志系统采集")
 
 def _env_settings[T: EnvSettings](settings_cls: type[T]) -> Callable[[], T]:
     # 运行时可以无参构造，字段从环境变量读取；类型检查仍会把必填别名当成构造参数

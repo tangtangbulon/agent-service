@@ -133,6 +133,7 @@ services:
       APP_NAME: ${APP_NAME:-安心保}
       APP_DEBUG: "false"
       LOGGING_LEVEL: ${LOGGING_LEVEL:-INFO}
+      LOGGING_FORMAT: json
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-insurance}
@@ -156,7 +157,7 @@ services:
         condition: service_started
         required: false
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthy', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/ready', timeout=8)"]
       interval: 15s
       timeout: 5s
       retries: 10

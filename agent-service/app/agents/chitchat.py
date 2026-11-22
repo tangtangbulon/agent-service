@@ -1,12 +1,12 @@
 from typing import NotRequired
 
-from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, SystemMessage
 from langgraph.graph import StateGraph
 
+from app.agents.history import trim_for_model
 from app.agents.schemas import InsuranceAgentState
-from app.core.config import settings
 from app.core.logging import get_logger
+from app.infra.llm import create_chat_model
 
 logger = get_logger(__name__)
 
@@ -30,12 +30,7 @@ class ChitchatState(InsuranceAgentState):
 
 class ChitchatAgent:
     def __init__(self) -> None:
-        self.model = init_chat_model(
-            model=settings.llm.chat_model,
-            model_provider="deepseek",
-            api_key=settings.llm.api_key,
-            extra_body={"thinking": {"type": "disabled"}},
-        )
+        self.model = create_chat_model()
 
     async def handle_chitchat(
         self,
@@ -57,7 +52,7 @@ class ChitchatAgent:
         response = await self.model.ainvoke(
             [
                 SystemMessage(content=SYSTEM_MESSAGE),
-                *state['messages'],
+                *trim_for_model(state['messages']),
             ]
         )
         return {

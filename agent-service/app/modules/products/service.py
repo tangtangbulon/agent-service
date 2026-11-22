@@ -16,6 +16,11 @@ class ProductService:
     async def list_products(self, category: str | None = None) -> list[Product]:
         return await self.repository.find_by_category(category)
 
+    async def get_active_by_ids(self, ids: list[int]) -> dict[int, Product]:
+        """按ID批量查询在售产品，不存在或已下架的产品不会出现在结果里"""
+        products = await self.repository.find_by_ids(ids)
+        return {product.id: product for product in products if product.status == "active"}
+
     
     async def list_candidates(
         self, 

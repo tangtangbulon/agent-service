@@ -36,6 +36,12 @@ async def init_checkpointer() -> AsyncPostgresSaver:
     logger.info("Checkpointer初始化成功~✅️")
     return checkpointer
 
+async def check_checkpointer() -> None:
+    """就绪检查：从 checkpointer 连接池取一个连接执行查询"""
+    async with checkpoint_pool.connection(timeout=3) as conn:
+        await conn.execute("SELECT 1")
+
+
 async def close_checkpointer() -> None:
     """关闭Checkpointer连接池"""
     await checkpoint_pool.close()

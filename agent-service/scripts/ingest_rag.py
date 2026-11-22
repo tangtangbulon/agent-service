@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 
 from langchain_milvus import BM25BuiltInFunction, Milvus
@@ -6,20 +7,12 @@ from langchain_ollama import OllamaEmbeddings
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.infra.database import AsyncSessionFactory, close_database
+from app.infra.llm import create_embeddings
 from app.modules.products.models import Product
 from app.modules.products.service import ProductService
 from app.rag.pipeline import RAGPipeline
 
 logger = get_logger(__name__)
-
-
-def build_embedding_model() -> OllamaEmbeddings:
-    """初始化向量模型，必须与服务端 app/rag 使用同一套配置。"""
-    return OllamaEmbeddings(
-        model=settings.rag.embedding_model,
-        base_url=settings.rag.ollama_base_url,
-        dimensions=settings.rag.embedding_dimensions,
-    )
 
 
 def build_vector_store(embedding_model: OllamaEmbeddings) -> Milvus:
@@ -34,23 +27,35 @@ def build_vector_store(embedding_model: OllamaEmbeddings) -> Milvus:
     )
 
 
-async def load_products() -> list[Product]:
-    """查询全部在售产品，脱离 Session 后再交给 Pipeline。"""
+async def load_products(product_ids: list[int] | None) -> list[Product]:
+    """查询在售产品（可只取指定ID），脱离 Session 后再交给 Pipeline。"""
     async with AsyncSessionFactory() as session:
         products = await ProductService(session).list_products()
         session.expunge_all()
-        return products
+    if product_ids:
+        products = [product for product in products if product.id in product_ids]
+        missing = set(product_ids) - {product.id for product in products}
+        if missing:
+            raise SystemExit(f"这些产品ID不存在或未在售：{sorted(missing)}")
+    return products
 
 
 async def main() -> None:
-    configure_logging(settings.logging.level)
+    parser = argparse.ArgumentParser(description="解析保险条款并写入 RAG 知识库")
+    parser.add_argument(
+        "--product-id", type=int, action="append", dest="product_ids",
+        help="只入库指定产品，可重复传入；不传则入库全部在售产品",
+    )
+    args = parser.parse_args()
 
-    embedding_model = build_embedding_model()
+    configure_logging(settings.logging.level, settings.logging.format)
+
+    embedding_model = create_embeddings()
     vector_store = build_vector_store(embedding_model)
     pipeline = RAGPipeline(vector_store)
 
     try:
-        products = await load_products()
+        products = await load_products(args.product_ids)
         logger.info("开始构建 RAG 知识库", product_count=len(products))
 
         for product in products:

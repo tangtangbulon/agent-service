@@ -13,6 +13,14 @@ class ChatPendingConfirmationError(ApplicationError):
         super().__init__()
 
 
+class ChatThreadBusyError(ApplicationError):
+    """同一会话上一条消息还在生成回复。"""
+
+    status_code = 409
+    code = "chat_thread_busy"
+    message = "该会话正在生成回复，请稍后再发送"
+
+
 class ChatDecisionNotExpectedError(ApplicationError):
     """当前没有等待确认的方案。"""
 

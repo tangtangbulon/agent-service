@@ -5,6 +5,7 @@ from app.modules.products.models import Product
 from app.modules.products.service import ProductService
 from fastapi.encoders import jsonable_encoder
 from app.agents.schemas import InsuranceAgentContext
+from app.modules.insurance_plan.exceptions import InvalidPlanProductError
 from app.modules.insurance_plan.schemas import InsurancePlanCreate
 from app.modules.insurance_plan.service import InsurancePlanService
 from langgraph.types import interrupt
@@ -49,6 +50,13 @@ async def save_insurance_plan(
     保存当前用户的保险推荐方案。
     当你查询完候选产品后，根据用户画像、候选产品生成保险组合方案，保存到数据库
     """
+    # 先校验产品再请用户确认，避免用户确认了一份包含无效产品的方案
+    async with AsyncSessionFactory() as session:
+        try:
+            plan = await InsurancePlanService(session).normalize_plan(plan)
+        except InvalidPlanProductError as exc:
+            return {"message": f"方案未保存：{exc.message}。请先用 query_candidate_products 查询有效产品后重新生成方案。"}
+
     decision = interrupt(# 中断执行，把方案发给用户看看
         { 
         "plan": plan.model_dump(mode="json"),
@@ -81,20 +89,27 @@ async def query_product_clause(
 
     Args:
         query: 需要从保险条款中查询的问题。
-        k: 返回的文档数量。
-        product_id: 保险产品ID。
+        k: 返回的文档数量，1到8之间，一般用5。
+        product_id: 保险产品ID，必须来自 query_candidate_products 的查询结果，不要猜测。
     """
     from app.rag import retriever
-    
+
+    async with AsyncSessionFactory() as session:
+        products = await ProductService(session).get_active_by_ids([product_id])
+    product = products.get(product_id)
+    if product is None:
+        return f"产品ID {product_id} 不存在或已下架，请先用 query_candidate_products 查询正确的产品ID。"
+
     chunks = await retriever.retrieve(query, k, product_id)
     if not chunks:
-        return "没有查询到相关保险条款。"
+        return f"没有在《{product.name}》中查询到相关保险条款。"
 
     # 把model转换字典数据
     sources = {
         # 给文档编号，最终格式 {"ref-001": {"content": ""}}
         f"ref-{i:03d}": {
             "product_id": chunk.product_id,
+            "product_name": product.name,
             "clause_name": chunk.clause_name,
             "section_path": chunk.section_path,
             "content": chunk.content,

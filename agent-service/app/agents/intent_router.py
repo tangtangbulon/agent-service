@@ -1,12 +1,11 @@
 import re
 from typing import Literal
 
-from langchain.chat_models import init_chat_model
 from langchain.messages import HumanMessage, SystemMessage
 
 from app.agents.schemas import RouteResult
-from app.core.config import settings
 from app.core.logging import get_logger
+from app.infra.llm import create_chat_model
 
 logger = get_logger(__name__)
 
@@ -25,13 +24,7 @@ intent只能从以下选项中选择：
 class IntentRouter:
 
     def __init__(self) -> None:
-        model = init_chat_model(
-            model=settings.llm.chat_model,
-            model_provider="deepseek",
-            api_key=settings.llm.api_key,
-            extra_body={"thinking": {"type": "disabled"}},
-        )
-        self.model = model.with_structured_output(RouteResult)
+        self.model = create_chat_model().with_structured_output(RouteResult)
 
     async def route(
         self,

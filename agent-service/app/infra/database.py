@@ -52,4 +52,3 @@ async def close_database() -> None:
 async def check_database() -> None:
     async with engine.connect() as connection:
         await connection.execute(text("SELECT 1"))
-    logger.info("数据库连接池初始化成功~✅️")    

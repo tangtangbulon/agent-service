@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.chat_thread.models import ChatThread
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from uuid import UUID
 
 
@@ -33,6 +33,12 @@ class ChatThreadRepository:
             )
         )
 
+
+    async def touch(self, thread_id: UUID) -> None:
+        """刷新最后活跃时间，会话列表按它排序"""
+        await self.session.execute(
+            update(ChatThread).where(ChatThread.id == thread_id).values(updated_at=func.now())
+        )
 
     async def delete(self,thread: ChatThread) -> None:
         await self.session.delete(thread)

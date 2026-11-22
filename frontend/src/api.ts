@@ -170,16 +170,22 @@ export async function streamChat(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let finished = false;
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const parts = buffer.split(/\r?\n\r?\n/);
     buffer = parts.pop() ?? '';
-    parts.forEach((eventText) => handleSseEvent(eventText, handlers));
+    for (const eventText of parts) {
+      if (handleSseEvent(eventText, handlers) === 'done') finished = true;
+    }
   }
-  if (buffer.trim()) {
-    handleSseEvent(buffer, handlers);
+  if (buffer.trim() && handleSseEvent(buffer, handlers) === 'done') {
+    finished = true;
+  }
+  if (!finished) {
+    throw new ApiError('连接已中断，回复可能不完整，请重试', 0);
   }
 }
 
@@ -190,26 +196,25 @@ function handleSseEvent(
     onAdditionalInfo?: (info: unknown) => void;
     onInterrupt?: (interrupt: PlanInterrupt) => void;
   },
-) {
+): string | undefined {
   const lines = eventText.split(/\r?\n/);
   const event = lines.find((line) => line.startsWith('event:'))?.slice(6).trim();
   const data = lines
     .filter((line) => line.startsWith('data:'))
     .map((line) => line.slice(5).trimStart())
     .join('\n');
-  if (!data) return;
+  if (!data) return event;
   if (event === 'message') {
     handlers.onMessage(parseSseMessage(data));
-    return;
-  }
-  if (event === 'interrupt') {
+  } else if (event === 'interrupt') {
     const interrupt = parseInterrupt(data);
     if (interrupt) handlers.onInterrupt?.(interrupt);
-    return;
-  }
-  if (event === 'additional_info') {
+  } else if (event === 'additional_info') {
     handlers.onAdditionalInfo?.(parseJsonLike(data) ?? data);
+  } else if (event === 'error') {
+    throw new ApiError(errorMessage(parseJsonLike(data), '生成回复时出错，请稍后重试'), 502);
   }
+  return event;
 }
 
 function parseSseMessage(data: string): string {

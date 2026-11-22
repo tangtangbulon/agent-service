@@ -15,7 +15,7 @@ class ChatRequest(BaseModel):
     """基础对话请求。message 与 decision 互斥。"""
 
     thread_id: UUID
-    message: str | None = Field(default=None, min_length=1)
+    message: str | None = Field(default=None, min_length=1, max_length=2000)
     decision: PlanDecision | None = None
 
     @model_validator(mode="after")

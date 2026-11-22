@@ -44,11 +44,10 @@ class IntentRouter:
             logger.info("模型意图识别完成", route_result=result)
             return RouteResult.model_validate(result)
         except Exception:
+            # 连接失败不能当成“听不懂”。抛出去后，对话接口会发 error 事件，
+            # 而不是回复“我还不能确定你的需求”。
             logger.exception("模型意图识别失败")
-            return RouteResult(
-                intent="fallback",
-                reason="模型意图识别失败",
-            )
+            raise
 
 
 # 基于规则的识别是否为寒暄

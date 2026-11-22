@@ -25,6 +25,30 @@ def test_social_intent_rules(message, expected):
     assert match_social_intent(message) == expected
 
 
+def test_chat_model_ignores_system_proxy():
+    from langchain_deepseek import ChatDeepSeek
+
+    from app.infra.llm import create_chat_model
+
+    model = create_chat_model()
+    assert isinstance(model, ChatDeepSeek)
+    assert model.http_async_client is not None and model.http_async_client.trust_env is False
+    assert model.http_client is not None and model.http_client.trust_env is False
+
+
+async def test_route_does_not_hide_model_outage():
+    from app.agents.intent_router import IntentRouter
+
+    class UnavailableModel:
+        async def ainvoke(self, messages):
+            raise RuntimeError("connection down")
+
+    router = IntentRouter()
+    router.model = UnavailableModel()  # type: ignore[assignment]
+    with pytest.raises(RuntimeError, match="connection down"):
+        await router.route("40岁，想买医疗险，预算5000", "")
+
+
 class TestRepairToolCallMessages:
     def test_closed_history_needs_no_repair(self):
         messages = [

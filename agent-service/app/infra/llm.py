@@ -1,5 +1,6 @@
 from typing import Any
 
+import httpx2
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_ollama import OllamaEmbeddings
@@ -18,6 +19,11 @@ def create_chat_model(**overrides: Any) -> BaseChatModel:
         "extra_body": {"thinking": {"type": "disabled"}},
     }
     options.update(overrides)
+    # httpx 会读取 macOS 系统代理。代理进程没在听时，连 DeepSeek 会直接失败，
+    # 即使本机可以直连。对话模型与本机 Ollama 一样，不走系统代理。
+    timeout = options["timeout"]
+    options.setdefault("http_client", httpx2.Client(trust_env=False, timeout=timeout))
+    options.setdefault("http_async_client", httpx2.AsyncClient(trust_env=False, timeout=timeout))
     return init_chat_model(**options)
 
 

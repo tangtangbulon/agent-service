@@ -1,7 +1,11 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+from app.common.schemas import BaseSchema
 
 
 class InsurancePlanItemCreate(BaseModel):
@@ -20,4 +24,27 @@ class InsurancePlanCreate(BaseModel):
     summary: str | None = None
     insured_profile: dict[str, Any] = Field(default_factory=dict)
     items: list[InsurancePlanItemCreate] = Field(min_length=1)
-    
+
+
+class InsurancePlanItemResponse(BaseSchema):
+    """保险方案项响应"""
+    id: UUID
+    plan_id: UUID
+    product_id: int
+    priority: int
+    recommendation_reason: str | None
+    annual_premium_budget: Decimal | None
+    status: str
+
+
+class InsurancePlanResponse(BaseSchema):
+    """保险方案响应"""
+    id: UUID
+    plan_name: str
+    summary: str | None
+    insured_profile: dict[str, Any]
+    annual_premium_budget: Decimal | None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    items: list[InsurancePlanItemResponse]

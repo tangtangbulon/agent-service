@@ -23,6 +23,9 @@ export interface UserSummary {
 }
 
 export interface AuthSession {
+  accessToken: string;
+  /** 令牌过期时间，毫秒时间戳 */
+  expiresAt: number;
   user: UserSummary;
 }
 

@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from typing import Any
 from aiostream import stream as astream
 from fastapi.sse import ServerSentEvent
@@ -58,28 +59,35 @@ async def iter_run_events(run: Any) -> AsyncGenerator[ServerSentEvent]:
             yield event
 
 
+@dataclass(frozen=True)
+class PreparedChat:
+    """已通过校验、可以直接交给 Agent 执行的一轮对话"""
+
+    graph_input: dict[str, Any] | Command
+    config: RunnableConfig
+    context: InsuranceAgentContext
+
+
 class ChatService:
     def __init__(self, session: AsyncSession, agent: CompiledStateGraph):
+        self.session = session
         self.repository = ChatThreadRepository(session)
         self.agent = agent
 
-    async def chat_stream(self, user_id: int, request: ChatRequest) -> AsyncGenerator[ServerSentEvent]:
+    async def prepare(self, user_id: int, request: ChatRequest) -> PreparedChat:
+        """校验会话归属和确认状态，必须在开始流式输出前调用，这样错误才能以 HTTP 状态码返回"""
         thread = await self.repository.find_owned(
             request.thread_id,
             user_id,
         )
+        # session 要等整个 SSE 响应结束才会被依赖注入关闭，必须在流式输出前主动归还连接
+        await self.session.close()
         if thread is None:
             raise ChatThreadNotFoundError
-
-        if request.decision:
-            _input = Command(resume=request.decision)
-        else:
-            _input = {"messages": [HumanMessage(content=request.message)]}
 
         config: RunnableConfig = {
             "configurable": {"thread_id": str(request.thread_id)}
         }
-        context = InsuranceAgentContext(user_id=user_id)
         snapshot = await self.agent.aget_state(config)
         pending = pending_interrupt_value(snapshot)
 
@@ -96,23 +104,25 @@ class ChatService:
                 raise ChatDecisionNotExpectedError
             graph_input = {"messages": [HumanMessage(content=request.message)]}
 
+        return PreparedChat(
+            graph_input=graph_input,
+            config=config,
+            context=InsuranceAgentContext(user_id=user_id),
+        )
+
+    async def chat_stream(self, prepared: PreparedChat) -> AsyncGenerator[ServerSentEvent]:
         stream = await self.agent.astream_events(
-            graph_input,
-            config,
-            context=context,
+            prepared.graph_input,
+            prepared.config,
+            context=prepared.context,
             version="v3",
             transformers=[CustomTransformer],
         )
 
-
         async for event in iter_run_events(stream):
             yield event
 
-        interrupts = await stream.interrupts()
-        for item in interrupts:
-            yield ServerSentEvent(data=item.value, event="interrupt")
-            
-        # 2.7.流结束后再读取中断，最后返回结束标识
+        # 流结束后再读取中断，最后返回结束标识
         for interrupt in await stream.interrupts():
             payload = getattr(interrupt, "value", interrupt)
             if isinstance(payload, dict):

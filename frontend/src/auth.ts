@@ -1,24 +1,28 @@
 import type { AuthSession } from './types';
 
-const STORAGE_KEY = 'insurance-mall-auth-v2';
+const STORAGE_KEY = 'insurance-mall-auth-v3';
 
-export const DEFAULT_SESSION: AuthSession = {
-  user: {
-    id: 1,
-    username: 'heima',
-    email: 'heima@example.com',
-    displayName: '黑马-虎哥',
-  },
-};
+function isValidSession(value: unknown): value is AuthSession {
+  if (!value || typeof value !== 'object') return false;
+  const session = value as Partial<AuthSession>;
+  return (
+    typeof session.accessToken === 'string' &&
+    typeof session.expiresAt === 'number' &&
+    session.expiresAt > Date.now() &&
+    typeof session.user?.id === 'number'
+  );
+}
 
 export function readSession(): AuthSession | null {
   try {
     const value = window.localStorage.getItem(STORAGE_KEY);
-    return value ? (JSON.parse(value) as AuthSession) : null;
+    const session: unknown = value ? JSON.parse(value) : null;
+    if (isValidSession(session)) return session;
   } catch {
-    window.localStorage.removeItem(STORAGE_KEY);
-    return null;
+    // 存储内容损坏时按未登录处理
   }
+  window.localStorage.removeItem(STORAGE_KEY);
+  return null;
 }
 
 export function saveSession(session: AuthSession): void {

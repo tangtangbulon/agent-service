@@ -42,7 +42,7 @@ export function ApplicationPage({ session, onBack, onSessionExpired }: Applicati
     setPaying(true);
     setError(null);
     try {
-      await markPlanItemInsured(session.user.id, planId, itemId);
+      await markPlanItemInsured(session.accessToken, planId, itemId);
       setPaid(true);
     } catch (reason) {
       if (reason instanceof ApiError && reason.status === 401) {

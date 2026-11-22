@@ -17,7 +17,7 @@ class ChatThread(Base, CreateAtMixin, UpdateAtMixin):
         primary_key=True,
         default=uuid4,
     )
-    user_id: Mapped[str] = mapped_column(BigInteger)
+    user_id: Mapped[int] = mapped_column(BigInteger)
     title: Mapped[str] = mapped_column(
         String(200),
         default="新会话",

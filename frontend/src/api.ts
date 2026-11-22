@@ -1,4 +1,5 @@
 import type {
+  AuthSession,
   ChatHistory,
   ChatThread,
   InsuranceCategory,
@@ -19,39 +20,35 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => null);
-    throw new ApiError(error?.message ?? '请求失败，请稍后重试', response.status);
+function errorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const { message, detail } = error as { message?: unknown; detail?: unknown };
+    if (typeof message === 'string') return message;
+    if (typeof detail === 'string') return detail;
   }
-  return response.json() as Promise<T>;
+  return fallback;
 }
 
-async function authorizedBusinessRequest<T>(
+function authHeaders(accessToken: string | null): Record<string, string> {
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
+
+async function request<T>(
   path: string,
-  userId: number,
+  accessToken: string | null,
   init?: RequestInit,
 ): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
-    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      'x-user-id': String(userId),
+      ...authHeaders(accessToken),
       ...init?.headers,
     },
   });
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new ApiError(error?.message ?? '璇锋眰澶辫触锛岃绋嶅悗閲嶈瘯', response.status);
+    throw new ApiError(errorMessage(error, '请求失败，请稍后重试'), response.status);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -59,27 +56,27 @@ async function authorizedBusinessRequest<T>(
   return response.json() as Promise<T>;
 }
 
-async function agentRequest<T>(
-  path: string,
-  userId: number,
-  init?: RequestInit,
-): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-user-id': String(userId),
-      ...init?.headers,
-    },
+interface LoginResponse {
+  access_token: string;
+  expires_in: number;
+  user: { id: number; username: string; email: string; display_name: string | null };
+}
+
+export async function login(username: string, password: string): Promise<AuthSession> {
+  const result = await request<LoginResponse>('/auth/login', null, {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
   });
-  if (!response.ok) {
-    const error = await response.json().catch(() => null);
-    throw new ApiError(error?.detail ?? error?.message ?? '请求失败，请稍后重试', response.status);
-  }
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  return response.json() as Promise<T>;
+  return {
+    accessToken: result.access_token,
+    expiresAt: Date.now() + result.expires_in * 1000,
+    user: {
+      id: result.user.id,
+      username: result.user.username,
+      email: result.user.email,
+      displayName: result.user.display_name,
+    },
+  };
 }
 
 export function listProducts(
@@ -91,62 +88,59 @@ export function listProducts(
     params.set('category', category);
   }
   const query = params.toString();
-  return request<Product[]>(`/products${query ? `?${query}` : ''}`, { signal });
+  return request<Product[]>(`/products${query ? `?${query}` : ''}`, null, { signal });
 }
 
 export function markPlanItemInsured(
-  userId: number,
+  accessToken: string,
   planId: string,
   itemId: string,
 ): Promise<unknown> {
-  return authorizedBusinessRequest<unknown>(
+  return request<unknown>(
     `/insurance-plans/${encodeURIComponent(planId)}/items/${encodeURIComponent(itemId)}/insured`,
-    userId,
+    accessToken,
     { method: 'PATCH' },
   );
 }
 
-export function getInsurancePlan(userId: number, planId: string): Promise<unknown> {
-  return authorizedBusinessRequest<unknown>(
-    `/insurance-plans/${encodeURIComponent(planId)}`,
-    userId,
-  );
+export function getInsurancePlan(accessToken: string, planId: string): Promise<unknown> {
+  return request<unknown>(`/insurance-plans/${encodeURIComponent(planId)}`, accessToken);
 }
 
-export function listChatThreads(userId: number): Promise<ChatThread[]> {
-  return agentRequest<ChatThread[]>('/chat-threads', userId);
+export function listChatThreads(accessToken: string): Promise<ChatThread[]> {
+  return request<ChatThread[]>('/chat-threads', accessToken);
 }
 
-export function createChatThread(userId: number, title = '保险咨询'): Promise<ChatThread> {
-  return agentRequest<ChatThread>('/chat-threads', userId, {
+export function createChatThread(accessToken: string, title = '保险咨询'): Promise<ChatThread> {
+  return request<ChatThread>('/chat-threads', accessToken, {
     method: 'POST',
     body: JSON.stringify({ title }),
   });
 }
 
-export function getChatHistory(userId: number, threadId: string): Promise<ChatHistory> {
-  return agentRequest<ChatHistory>(`/chat-threads/${threadId}/messages`, userId);
+export function getChatHistory(accessToken: string, threadId: string): Promise<ChatHistory> {
+  return request<ChatHistory>(`/chat-threads/${threadId}/messages`, accessToken);
 }
 
 export function renameChatThread(
-  userId: number,
+  accessToken: string,
   threadId: string,
   title: string,
 ): Promise<ChatThread> {
-  return agentRequest<ChatThread>(`/chat-threads/${threadId}`, userId, {
+  return request<ChatThread>(`/chat-threads/${threadId}`, accessToken, {
     method: 'PATCH',
     body: JSON.stringify({ title }),
   });
 }
 
-export async function deleteChatThread(userId: number, threadId: string): Promise<void> {
-  await agentRequest<void>(`/chat-threads/${threadId}`, userId, {
+export async function deleteChatThread(accessToken: string, threadId: string): Promise<void> {
+  await request<void>(`/chat-threads/${threadId}`, accessToken, {
     method: 'DELETE',
   });
 }
 
 export async function streamChat(
-  userId: number,
+  accessToken: string,
   threadId: string,
   input: { message?: string; decision?: Record<string, unknown> },
   handlers: {
@@ -159,7 +153,7 @@ export async function streamChat(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-user-id': String(userId),
+      ...authHeaders(accessToken),
     },
     body: JSON.stringify({ thread_id: threadId, ...input }),
   });
@@ -167,7 +161,7 @@ export async function streamChat(
     const error = await response.json().catch(() => null);
     const interrupt = error?.interrupt ? parseInterrupt(JSON.stringify(error.interrupt)) : null;
     throw new ApiError(
-      error?.detail ?? error?.message ?? '消息发送失败，请稍后重试',
+      errorMessage(error, '消息发送失败，请稍后重试'),
       response.status,
       interrupt,
     );

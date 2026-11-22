@@ -1,5 +1,7 @@
 from decimal import Decimal
+from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.insurance_plan.models import (
@@ -57,3 +59,25 @@ class InsurancePlanRepository:
         await self.session.flush()
 
         return plan
+
+    async def find_owned(
+        self,
+        plan_id: UUID,
+        user_id: int,
+        for_update: bool = False,
+    ) -> InsurancePlan | None:
+        statement = select(InsurancePlan).where(
+            InsurancePlan.id == plan_id,
+            InsurancePlan.user_id == user_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self.session.scalar(statement)
+
+    async def list_items(self, plan_id: UUID) -> list[InsurancePlanItem]:
+        items = await self.session.scalars(
+            select(InsurancePlanItem)
+            .where(InsurancePlanItem.plan_id == plan_id)
+            .order_by(InsurancePlanItem.priority.asc(), InsurancePlanItem.created_at.asc())
+        )
+        return list(items.all())

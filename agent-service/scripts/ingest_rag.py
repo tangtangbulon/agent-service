@@ -14,10 +14,11 @@ logger = get_logger(__name__)
 
 
 def build_embedding_model() -> OllamaEmbeddings:
-    """初始化向量模型，参数与 notebooks/09/rag.ipynb 一致。"""
+    """初始化向量模型，必须与服务端 app/rag 使用同一套配置。"""
     return OllamaEmbeddings(
-        model="qwen3-embedding:0.6b",
-        dimensions=1024,
+        model=settings.rag.embedding_model,
+        base_url=settings.rag.ollama_base_url,
+        dimensions=settings.rag.embedding_dimensions,
     )
 
 

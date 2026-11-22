@@ -1,10 +1,9 @@
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Depends
+from app.modules.auth.dependencies import CurrentUserId
 from app.modules.chat_thread.service import ChatThreadService
 from app.modules.chat_thread.schemas import ChatThreadCreate, ChatThreadResponse,ChatHistoryResponse
-from typing import Annotated
-from fastapi import Header
 from app.infra.database import get_session
 from uuid import UUID
 from fastapi import Response, status,Request
@@ -27,9 +26,9 @@ def get_service(
 @router.post("",response_model=ChatThreadResponse)
 async def create_chat_thread(
     request:ChatThreadCreate,
-    user_id:Annotated[int,Header(alias="x-user-id")],
+    user_id:CurrentUserId,
     service:ChatThreadService=Depends(get_service)):
-    """c
+    """
     创建会话
     """
     return await service.add(user_id,request.title)
@@ -39,7 +38,7 @@ async def create_chat_thread(
 
 @router.get("",response_model=list[ChatThreadResponse])
 async def list_by_user_id(
-    user_id:Annotated[int,Header(alias="x-user-id")],
+    user_id:CurrentUserId,
     service:ChatThreadService=Depends(get_service)):
     """
     查询会话列表
@@ -49,25 +48,25 @@ async def list_by_user_id(
 
 @router.patch("/{thread_id}",response_model=ChatThreadResponse)
 async def rename(
-    thread_id:str,
+    thread_id:UUID,
     request:ChatThreadCreate,
-    user_id:Annotated[int,Header(alias="x-user-id")],
+    user_id:CurrentUserId,
     service:ChatThreadService=Depends(get_service)):
-    """c
+    """
     重命名会话
     """
-    return await service.rename(UUID(thread_id),user_id,request.title)
+    return await service.rename(thread_id,user_id,request.title)
 
 
 @router.get("/{thread_id}/messages", response_model=ChatHistoryResponse)
 async def get_chat_messages(
-    thread_id:str,
-    user_id:Annotated[int,Header(alias="x-user-id")],
+    thread_id:UUID,
+    user_id:CurrentUserId,
     service:ChatThreadService=Depends(get_service)):
     """
     查询会话历史
     """
-    return await service.get_chat_history(UUID(thread_id),user_id)
+    return await service.get_chat_history(thread_id,user_id)
 
 
 @router.delete(
@@ -76,7 +75,7 @@ async def get_chat_messages(
 )
 async def delete_chat_thread(
     thread_id: UUID,
-    user_id: Annotated[int, Header(alias="x-user-id")],
+    user_id: CurrentUserId,
     service: ChatThreadService = Depends(get_service),
 ) -> Response:
     """删除指定会话"""

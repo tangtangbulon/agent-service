@@ -10,6 +10,9 @@ wheels/
 .venv
 .env
 
+# 含密钥的部署配置，仓库里只保留 *.example 模板
+deploy/milvus/user.yaml
+
 # Node
 node_modules/
 *.tsbuildinfo

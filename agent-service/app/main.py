@@ -49,13 +49,17 @@ app=FastAPI(
 )
 
 # 注册路由
+from app.modules.auth.router import router as auth_router
 from app.modules.products.router import router as products_router
 from app.modules.chat_thread.router import router as chat_thread_router
 from app.modules.chat.router import router as chat_router
+from app.modules.insurance_plan.router import router as insurance_plan_router
 
+app.include_router(auth_router)
 app.include_router(products_router)
 app.include_router(chat_thread_router)
 app.include_router(chat_router)
+app.include_router(insurance_plan_router)
 #测试请求
 @app.get("/healthy",summary="健康检查")
 async def healthy() -> dict[str,str]:

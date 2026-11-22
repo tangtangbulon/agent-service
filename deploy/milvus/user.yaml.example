@@ -1,0 +1,12 @@
+# 复制为 user.yaml 后填入真实的 DashScope API Key；user.yaml 已被 git 忽略
+credential:
+  dashscope_apikey:
+    apikey: <your-dashscope-api-key>
+
+function:
+  rerank:
+    model:
+      providers:
+        ali:
+          credential: dashscope_apikey
+          # url: https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank

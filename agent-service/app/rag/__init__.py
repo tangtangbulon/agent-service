@@ -8,8 +8,9 @@ from app.rag.retriever import ParentChunkRetriever
 
 # 1.初始化向量模型
 _embeddings = OllamaEmbeddings(
-    model="qwen3-embedding:0.6b",
-    dimensions=1024,
+    model=settings.rag.embedding_model,
+    base_url=settings.rag.ollama_base_url,
+    dimensions=settings.rag.embedding_dimensions,
 )
 
 # 2.初始化VectorStore

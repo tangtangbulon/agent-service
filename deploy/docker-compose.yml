@@ -1,3 +1,8 @@
+# 本地开发只启动基础设施：docker compose up -d
+# 完整部署（含后端和前端）：docker compose --profile app up -d --build
+# 需要在本机同时运行向量模型时再加 --profile ollama；否则通过 OLLAMA_BASE_URL 指向外部 Ollama
+# 基础设施端口默认只绑定 127.0.0.1，对外只暴露前端的 WEB_PORT；
+# 基础设施部署在虚拟机、开发机需要远程连接时，在 .env 中把 BIND_ADDR 设为虚拟机的局域网 IP
 services:
   postgres:
     image: postgres:16
@@ -5,9 +10,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-insurance}
       POSTGRES_USER: ${POSTGRES_USER:-insurance}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-insurance123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 deploy/.env 中设置 POSTGRES_PASSWORD}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${BIND_ADDR:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
@@ -41,15 +46,15 @@ services:
       - insurance-net
 
   minio:
-    image: minio/minio:RELEASE.2024-04-18T19-09-19Z
+    image: milvusdb/minio:RELEASE.2024-12-18T13-15-44Z
     container_name: hm-minio
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin2026}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?请在 deploy/.env 中设置 MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?请在 deploy/.env 中设置 MINIO_ROOT_PASSWORD}
     command: minio server /minio_data --console-address ":9001"
     ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "${BIND_ADDR:-127.0.0.1}:${MINIO_API_PORT:-9000}:9000"
+      - "${BIND_ADDR:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/minio_data
     healthcheck:
@@ -72,12 +77,12 @@ services:
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
-      MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin2026}
+      MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
     command: milvus run standalone
     ports:
-      - "${MILVUS_PORT:-19530}:19530"
-      - "9091:9091"
+      - "${BIND_ADDR:-127.0.0.1}:${MILVUS_PORT:-19530}:19530"
+      - "${BIND_ADDR:-127.0.0.1}:9091:9091"
     volumes:
       - milvus_data:/var/lib/milvus
       - ./milvus/user.yaml:/milvus/configs/user.yaml:ro
@@ -89,10 +94,26 @@ services:
     restart: unless-stopped
     networks:
       - insurance-net
+
+  # 向量模型服务；使用外部 Ollama 时不启用此 profile，并在 .env 中设置 OLLAMA_BASE_URL
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hm-ollama
+    profiles: ["ollama"]
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - insurance-net
+
+  # Milvus 管理界面，没有认证，只在需要时启动：docker compose --profile tools up -d attu
   attu:
     image: zilliz/attu:v3.0.0-beta.6
+    profiles: ["tools"]
     ports:
-      - "3000:3000"
+      - "${BIND_ADDR:-127.0.0.1}:3000:3000"
     environment:
       - MILVUS_ADDRESS=milvus:19530
     volumes:
@@ -104,11 +125,68 @@ services:
     networks:
       - insurance-net
 
+  backend:
+    build: ../agent-service
+    container_name: hm-backend
+    profiles: ["app"]
+    environment:
+      APP_NAME: ${APP_NAME:-安心保}
+      APP_DEBUG: "false"
+      LOGGING_LEVEL: ${LOGGING_LEVEL:-INFO}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-insurance}
+      DB_USER: ${POSTGRES_USER:-insurance}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+      AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: ${AUTH_ACCESS_TOKEN_EXPIRE_MINUTES:-120}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      CHAT_MODEL: ${CHAT_MODEL:-deepseek-v4-flash}
+      MINERU_TOKEN: ${MINERU_TOKEN:-}
+      MILVUS_HOST: milvus
+      MILVUS_PORT: 19530
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-qwen3-embedding:0.6b}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+        required: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthy', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - insurance-net
+
+  frontend:
+    build: ../frontend
+    container_name: hm-frontend
+    profiles: ["app"]
+    environment:
+      BACKEND_HOST: backend
+      BACKEND_PORT: 8001
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - insurance-net
+
 volumes:
   postgres_data:
   etcd_data:
   minio_data:
   milvus_data:
+  ollama_data:
   attu-data:
 
 networks:

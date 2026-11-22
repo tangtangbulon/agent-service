@@ -22,7 +22,7 @@ class AppSettings(EnvSettings):
     name: str = Field(alias="APP_NAME")
     host: str = Field(alias="APP_HOST", default="127.0.0.1")
     port: int = Field(alias="APP_PORT", default=8001)
-    debug: bool = Field(alias="APP_DEBUG", default=True, description="是否开启FastAPI的DEBUG模式")
+    debug: bool = Field(alias="APP_DEBUG", default=False, description="是否开启FastAPI的DEBUG模式")
 
 class DatabaseSettings(EnvSettings):
     """数据库相关设置"""
@@ -63,6 +63,12 @@ class LLMSettings(EnvSettings):
     api_key: str = Field(alias="DEEPSEEK_API_KEY")
     chat_model: str = Field(alias="CHAT_MODEL", default="deepseek-v4-flash")
 
+class AuthSettings(EnvSettings):
+    """认证相关配置"""
+    jwt_secret: str = Field(alias="AUTH_JWT_SECRET", min_length=32, description="JWT签名密钥，至少32个字符")
+    jwt_algorithm: str = Field(alias="AUTH_JWT_ALGORITHM", default="HS256")
+    access_token_expire_minutes: int = Field(alias="AUTH_ACCESS_TOKEN_EXPIRE_MINUTES", default=120, gt=0)
+
 class LoggingSettings(EnvSettings):
     """日志相关配置"""
     level: str = Field(alias="LOGGING_LEVEL", default="INFO") # 可选值：DEBUG、INFO、WARNING、ERROR、CRITICAL
@@ -76,6 +82,9 @@ class RAGSettings(EnvSettings):
     mineru_token: str = Field(alias="MINERU_TOKEN")
     milvus_host: str = Field(alias="MILVUS_HOST", default="127.0.0.1")
     milvus_port: int = Field(alias="MILVUS_PORT", default=19530)
+    ollama_base_url: str = Field(alias="OLLAMA_BASE_URL", default="http://127.0.0.1:11434")
+    embedding_model: str = Field(alias="EMBEDDING_MODEL", default="qwen3-embedding:0.6b")
+    embedding_dimensions: int = Field(alias="EMBEDDING_DIMENSIONS", default=1024)
     @computed_field
     @property
     def milvus_url(self) -> str:
@@ -85,6 +94,7 @@ class Settings(BaseSettings):
     app: AppSettings = Field(default_factory=_env_settings(AppSettings))
     db: DatabaseSettings = Field(default_factory=_env_settings(DatabaseSettings))
     llm: LLMSettings = Field(default_factory=_env_settings(LLMSettings))
+    auth: AuthSettings = Field(default_factory=_env_settings(AuthSettings))
     logging: LoggingSettings = Field(default_factory=_env_settings(LoggingSettings))
     rag: RAGSettings = Field(default_factory=_env_settings(RAGSettings))
 
